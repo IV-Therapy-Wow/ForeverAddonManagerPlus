@@ -1,0 +1,9 @@
+ForeverAddonManagerPlus 1.0.5
+
+I changed the first-run setup so a new install starts with the addon choices already made in Blizzard's AddOns window. You shouldn't have to go through every location and tick the same boxes again. Once you save your setup, those saved profiles are left alone on later launches.
+
+I added two ways to reuse addon setups. Copy settings from lets you take the active profile from another location tab and use it as the starting point for the current tab. Synchronize from Blizzard Settings copies the current Blizzard addon choices into the tab you're working on, or into the active profile on all nine location tabs in the selected profile set. The all-tabs option asks for confirmation again because it replaces more than one profile.
+
+The current location tab is now green while the other location tabs are grey, so it's easier to tell which location is active. I also simplified the footer: it stays blank until you make a change, shows Changes not saved while you're editing, and confirms All changes saved after you save.
+
+I removed the search box and the addon count line. They took up space without helping much, so the addon list can use more of the window. The status marker is separate from the saved profile checkbox: it shows whether the addon is loaded now, while the checkbox shows what the selected profile wants enabled.

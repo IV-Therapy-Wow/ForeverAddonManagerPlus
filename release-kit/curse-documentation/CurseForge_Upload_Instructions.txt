@@ -1,0 +1,9 @@
+CURSEFORGE RELEASE FILES
+
+1. Upload ForeverAddonManagerPlus_1.0.5.zip as the addon file.
+2. Upload the six images from assets/CurseForge_Screenshots as screenshots.
+3. Replace the YOUR-CURSEFORGE-IMAGE-URL placeholders in CurseForge_Description.html with the URLs CurseForge gives you.
+4. Copy the contents of CurseForge_Description.html into the project description.
+5. Use CurseForge_Listing.txt for the plain-text listing and CHANGELOG_1.0.5.txt for the release changelog.
+
+The five addon interface images are recreated UI previews based on the 1.0.5 source layout. They are not captured from a running WoW Forever client. One image is a separate, uncaptioned photo.

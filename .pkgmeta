@@ -1,0 +1,11 @@
+package-as: ForeverAddonManagerPlus
+
+ignore:
+  - release-kit
+
+move-folders:
+  ForeverAddonManagerPlus/ForeverAddonManagerPlus: ForeverAddonManagerPlus
+
+manual-changelog:
+  filename: release-kit/curse-documentation/CHANGELOG_1.0.5.txt
+  markup-type: plain

@@ -1,0 +1,22 @@
+CURSEFORGE SUMMARY
+
+Set up different addon profiles for each location and class/role in World of Warcraft: Forever. Let the addon switch between your World, City, dungeon, Raid, Battleground, Arena, and other setups as you play.
+
+DESCRIPTION
+
+ForeverAddonManagerPlus keeps a separate addon setup for each type of area in World of Warcraft: Forever. It can select profiles automatically for World, City, dungeons, Raids, Battlegrounds, Arenas, the Deeprun Tram, Scenarios, and other instance types. You can also choose DPS, Healer, Tank, or Support for your class and keep a different location setup for each role.
+
+On a fresh installation, the Default location profiles start with the enabled and disabled choices from Blizzard's AddOns window. Once you save your setup, your own profile choices are kept. The Synchronize from Blizzard Settings button lets you copy Blizzard's current settings into one tab or into the active profile on all nine tabs in the current profile set.
+
+You can copy settings from another location tab, create extra named profiles, and keep settings for addons that are temporarily uninstalled. The addon list shows the saved profile checkbox separately from the live loaded status. A movable minimap button provides a configurable tooltip with your selected role, current location type, and optional addon status list.
+
+Created by IV Therapy
+Waffle House Guild — PVP Ruleset
+November 25, 2026
+Version 1.0.5
+
+OPEN-SOURCE LICENSE AND COMMUNITY PRINCIPLE
+
+ForeverAddonManagerPlus is an independent community addon for World of Warcraft: Forever and is released under the MIT License. Any player may use, inspect, copy, fork, modify, keep their own version, and share or redistribute the addon without asking me for separate permission. The MIT License requires that its copyright and permission notice be included with copies or substantial portions of the software. It allows use and redistribution without a royalty, and the software is provided "AS IS", without warranty. The license does not grant rights to World of Warcraft trademarks, game content, or third-party materials. This addon was made by IV Therapy of Waffle House Guild on the PVP Ruleset. It is not affiliated with, sponsored by, or endorsed by Blizzard Entertainment or the operators of WoW Forever. The full license text is included with the addon.
+
+I believe making people pay for addons should be against the core values of any real gamer. Games are about enjoying them in the way you want to play, and customization tools and quality-of-life features should be available to everyone. Keeping those tools away from other players only limits how they can enjoy the game and hurts the community as a whole. That's why I make my original addon available without a purchase requirement. The MIT License does not add a non-commercial restriction, so others may redistribute their own copies under its terms, including for a fee. That is part of the license; it doesn't change my view that addons should be freely available to the community.
