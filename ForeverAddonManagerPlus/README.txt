@@ -1,5 +1,5 @@
 ForeverAddonManagerPlus
-Version 1.0.5
+Version 1.0.6
 A full-feature addon manager for World of Warcraft: Forever.
 
 WHAT IT DOES
@@ -86,8 +86,10 @@ tooltip.
 MANAGER WINDOW
 
 The manager uses an expanded, resizable-to-screen layout that leaves some of
-the game visible around it. The tab for your current location is highlighted
-green, while the other location tabs are grey. Its class/role selector,
+the game visible around it. When you open the tab for the location you're in,
+a small green marker and the words "THIS RULESET IS ACTIVE" identify it. The
+other tabs keep their normal grey appearance, and the nebula background stays
+as it was. Its class/role selector,
 profile controls, addon list, copy/synchronization controls, and Settings page
 are all available from the same window. The footer stays blank until you make
 a change; it then shows whether the change has been saved.
@@ -159,4 +161,4 @@ modified versions to be redistributed, including for a fee, as long as its
 terms are followed. The community principle above explains my view; it does
 not add restrictions to the MIT License.
 
-Version 1.0.5
+Version 1.0.6

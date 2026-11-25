@@ -8,12 +8,12 @@ ForeverAddonManagerPlus keeps a separate addon setup for each type of area in Wo
 
 On a fresh installation, the Default location profiles start with the enabled and disabled choices from Blizzard's AddOns window. Once you save your setup, your own profile choices are kept. The Synchronize from Blizzard Settings button lets you copy Blizzard's current settings into one tab or into the active profile on all nine tabs in the current profile set.
 
-You can copy settings from another location tab, create extra named profiles, and keep settings for addons that are temporarily uninstalled. The addon list shows the saved profile checkbox separately from the live loaded status. A movable minimap button provides a configurable tooltip with your selected role, current location type, and optional addon status list.
+You can copy settings from another location tab, create extra named profiles, and keep settings for addons that are temporarily uninstalled. The current location tab gets a green marker and a "THIS RULESET IS ACTIVE" label when you are viewing that location. The addon list shows the saved profile checkbox separately from the live loaded status. A movable minimap button provides a configurable tooltip with your selected role, current location type, and optional addon status list.
 
 Created by IV Therapy
 Waffle House Guild — PVP Ruleset
 November 25, 2026
-Version 1.0.5
+Version 1.0.6
 
 OPEN-SOURCE LICENSE AND COMMUNITY PRINCIPLE
 

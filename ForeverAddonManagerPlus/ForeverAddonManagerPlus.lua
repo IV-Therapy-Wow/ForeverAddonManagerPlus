@@ -1,6 +1,6 @@
 local ADDON_NAME = ...
 
-local VERSION = "1.0.5"
+local VERSION = "1.0.6"
 local ADDON_FOLDER = ADDON_NAME or "ForeverAddonManagerPlus"
 
 local LOCATION_TYPES = {
@@ -93,6 +93,7 @@ local listContent
 local listScroll
 local footerStatus
 local currentLocationText
+local activeRulesetIndicator
 local currentProfileText
 local saveButton
 local discardButton
@@ -1373,10 +1374,17 @@ RefreshLocationHeader = function()
     if currentLocationText then
         currentLocationText:SetText("Current location: " .. tostring(LOCATION_LABELS[currentLocation] or "Detecting")
             .. "  —  " .. tostring(currentLocationName or "Unknown area"))
-        if activePage == currentLocation then
-            currentLocationText:SetTextColor(0.30, 1.0, 0.42)
+        currentLocationText:SetTextColor(0.76, 0.79, 0.85)
+    end
+
+    -- Only mark the ruleset when its matching location tab is open.
+    local viewingActiveRuleset = activePage ~= "settings" and currentLocation ~= nil
+        and activePage == currentLocation
+    if activeRulesetIndicator then
+        if viewingActiveRuleset then
+            activeRulesetIndicator:Show()
         else
-            currentLocationText:SetTextColor(0.68, 0.70, 0.74)
+            activeRulesetIndicator:Hide()
         end
     end
 
@@ -1390,8 +1398,8 @@ RefreshLocationHeader = function()
 
     for key, button in pairs(tabButtons) do
         local label = LOCATION_LABELS[key] or "Settings"
-        if key == currentLocation then
-            button:SetText("|cff4dff70" .. label .. "|r")
+        if viewingActiveRuleset and key == currentLocation then
+            button:SetText("|cff4dff70●|r |cffdfe6f5" .. label .. "|r")
         else
             button:SetText("|cff9a9a9a" .. label .. "|r")
         end
@@ -2032,6 +2040,10 @@ end
 local function CreatePanelLocationControls()
     currentLocationText = MakeLabel(locationContent, "", "GameFontHighlightSmall")
     currentLocationText:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -116)
+
+    activeRulesetIndicator = MakeLabel(locationContent, "|cff4dff70● THIS RULESET IS ACTIVE|r", "GameFontHighlightSmall")
+    activeRulesetIndicator:SetPoint("TOPLEFT", panel, "TOPLEFT", 380, -116)
+    activeRulesetIndicator:Hide()
 
     currentProfileText = MakeLabel(locationContent, "Profile:", "GameFontNormal")
     currentProfileText:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -140)

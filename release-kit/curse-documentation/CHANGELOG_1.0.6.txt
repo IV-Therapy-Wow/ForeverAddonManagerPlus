@@ -1,0 +1,3 @@
+ForeverAddonManagerPlus 1.0.6
+
+I changed the way the current location is marked in the manager. The green tab fill was too much, especially when opening Settings. The original nebula background stays as it was. When you're viewing the tab for the location you're actually in, a small green dot and a "THIS RULESET IS ACTIVE" label identify it. The other tabs stay grey, and the active notice disappears when you open Settings or another location tab.
