@@ -1,5 +1,5 @@
 ForeverAddonManagerPlus
-Version 1.0.6
+Version 1.0.7
 A full-feature addon manager for World of Warcraft: Forever.
 
 WHAT IT DOES
@@ -60,39 +60,48 @@ settings shown in Blizzard's AddOns window. Later scans leave saved choices
 alone and only fill in settings for newly discovered addons.
 
 You can copy the active profile from another location tab with the "Copy
-settings from" menu. The "Synchronize from Blizzard Settings" button copies
-the current Blizzard addon settings into the selected tab, or into the active
-profile on every location tab in the current profile set after a second
-confirmation. The current tab's copy must be saved with Save Page; the all-tabs
-option saves its changes immediately. Other named profile copies and other
-class/role sets are left alone.
+settings from" menu. The manager asks before copying, and the copied settings
+go into the current tab as an unsaved draft. Review them and click Save Page
+when you want to keep them. The "Synchronize from Blizzard Settings" button
+works the same way for the current tab; its Save Page button is enabled after
+the sync. The all-tabs option asks for a second confirmation and saves the
+active profile on all nine tabs in the current profile set. Other named profile
+copies and other class/role sets are left alone.
 
 Addon settings are tied to the addon's folder name. The saved registry keeps
 profile choices for addons that are temporarily uninstalled, so those choices
-are still there when the addon is installed again. You can also manually track
-an addon by its folder name before installing it. Refreshing the installed
-addon list does not remove missing addons or erase their saved settings.
+are still there when the addon is installed again. Missing addons are hidden
+from the list by default; turn on "Show missing addons" when you want to see
+them. Refreshing the installed-addon list does not erase their saved settings.
 
 MINIMAP BUTTON AND STATUS TOOLTIP
 
 The movable minimap button can be shown or hidden from the Settings page. It
 can be dragged around the minimap and adjusts to different minimap shapes. It
-fades when it is not being used. Its tooltip can show your selected class and
-role with the matching in-game role icon, your current location type, and a
-color-coded list of installed addons (green for loaded and red for not currently loaded).
-You can choose whether the role information and addon list appear in the
-tooltip.
+fades when it is not being used. Its tooltip can show your class icon and name
+on one line, your selected role and role icon on the next, your current location
+type and location name, and an optional list of installed addons. Addon names
+keep their own colours; a small green or red dot appears before each name to
+show whether it is running. You can choose whether the class and role
+information and addon list appear in the tooltip.
 
 MANAGER WINDOW
 
 The manager uses an expanded, resizable-to-screen layout that leaves some of
-the game visible around it. When you open the tab for the location you're in,
-a small green marker and the words "THIS RULESET IS ACTIVE" identify it. The
-other tabs keep their normal grey appearance, and the nebula background stays
-as it was. Its class/role selector,
-profile controls, addon list, copy/synchronization controls, and Settings page
-are all available from the same window. The footer stays blank until you make
-a change; it then shows whether the change has been saved.
+the game visible around it. The tab you're viewing has a green outline and
+bright white text, so it's always clear which page is selected. When that tab
+matches the area you're actually in, a round green marker and the words "THIS
+RULESET IS ACTIVE" identify the active ruleset. The original nebula background
+stays as it was.
+
+The addon list scrolls smoothly with the mouse wheel and has a scrollbar with
+up and down buttons. The selected tab's copy and sync controls are in the same
+window. Copying from another tab asks first and still requires Save Page.
+Toggle Addons warns before leaving if you have unsaved edits, and lets you
+cancel, discard, or save before opening Blizzard's AddOns window. The Command
+List button opens the slash-command reference; click a command to select it
+for copying. The footer stays blank until you make a change, then shows whether
+it has been saved.
 
 GETTING STARTED
 
@@ -161,4 +170,7 @@ modified versions to be redistributed, including for a fee, as long as its
 terms are followed. The community principle above explains my view; it does
 not add restrictions to the MIT License.
 
-Version 1.0.6
+Version 1.0.7
+CITY PROFILE DETECTION
+
+The City profile is limited to the major auction-house hubs listed by the addon. Inns and resting areas in smaller towns, such as Gadgetzan, do not switch you to the City profile.

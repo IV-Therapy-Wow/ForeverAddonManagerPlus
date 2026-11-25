@@ -1,19 +1,25 @@
 CURSEFORGE SUMMARY
 
-Set up different addon profiles for each location and class/role in World of Warcraft: Forever. Let the addon switch between your World, City, dungeon, Raid, Battleground, Arena, and other setups as you play.
+Manage addon profiles for World of Warcraft: Forever. Keep separate setups for different locations and class roles, and let the addon switch profiles as you move around the game.
 
 DESCRIPTION
 
-ForeverAddonManagerPlus keeps a separate addon setup for each type of area in World of Warcraft: Forever. It can select profiles automatically for World, City, dungeons, Raids, Battlegrounds, Arenas, the Deeprun Tram, Scenarios, and other instance types. You can also choose DPS, Healer, Tank, or Support for your class and keep a different location setup for each role.
+ForeverAddonManagerPlus keeps separate addon profiles for World, City, Instance, Raid, Battleground, Arena, Tram, Scenario, and Other. It detects the type of area you're in and selects the matching profile. You can also choose DPS, Healer, Tank, or Support for your class and keep a different set of location profiles for each role.
 
-On a fresh installation, the Default location profiles start with the enabled and disabled choices from Blizzard's AddOns window. Once you save your setup, your own profile choices are kept. The Synchronize from Blizzard Settings button lets you copy Blizzard's current settings into one tab or into the active profile on all nine tabs in the current profile set.
+On a fresh installation, the Default location profiles start with the enabled and disabled choices from Blizzard's AddOns window. After you save your setup, later scans leave your choices alone and only add settings for newly discovered addons.
 
-You can copy settings from another location tab, create extra named profiles, and keep settings for addons that are temporarily uninstalled. The current location tab gets a green marker and a "THIS RULESET IS ACTIVE" label when you are viewing that location. The addon list shows the saved profile checkbox separately from the live loaded status. A movable minimap button provides a configurable tooltip with your selected role, current location type, and optional addon status list.
+The tab you're viewing has a green outline and bright white text. When it matches the area you're actually in, a round green marker and a "THIS RULESET IS ACTIVE" notice identify the active ruleset. The original nebula background stays unchanged.
+
+You can create extra named profiles or copy settings from another location tab. The manager asks before copying, and the copied settings stay in the current tab's draft until you press Save Page. Synchronize from Blizzard Settings works the same way for the selected tab. Updating all nine tabs asks for a second confirmation and saves the active profiles in the current profile set.
+
+The addon list scrolls smoothly and has a scrollbar with up and down buttons. The checkbox is the setting saved in the selected profile; the round status icon shows the current state. Green means an addon is enabled and loaded, red means it is disabled or not running, and grey means it isn't installed. Missing addons are hidden by default and can be shown with the Show missing addons checkbox. Their saved choices stay in the registry when they're uninstalled.
+
+Toggle Addons opens Blizzard's built-in AddOns window. If you have unsaved edits, the manager lets you cancel, discard them, or save before switching windows. The Command List button opens a list of slash commands; click a command to select it for copying. The movable minimap button can show your class and role with larger icons, your current location type, and an optional list of addon states. Addon names keep their own colours, with a separate round green or red dot beside each name. City profiles only activate in the major auction-house hubs listed by the addon; inns in smaller towns such as Gadgetzan stay on the World profile.
 
 Created by IV Therapy
 Waffle House Guild — PVP Ruleset
 November 25, 2026
-Version 1.0.6
+Version 1.0.7
 
 OPEN-SOURCE LICENSE AND COMMUNITY PRINCIPLE
 

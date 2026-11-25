@@ -1,0 +1,13 @@
+ForeverAddonManagerPlus 1.0.7
+
+I made the addon list easier to use. It now scrolls smoothly with the mouse wheel, including when the pointer is over an addon row or checkbox, and the scrollbar has up and down buttons. Missing addons start hidden; turn on Show missing addons when you want to see saved entries for addons that aren't installed. I removed the manual tracking box because the registry already keeps those settings.
+
+The tab you're viewing now has a green outline and bright white text. When it is the location you're actually in, a centered green dot and THIS RULESET IS ACTIVE label show that its rules are in use. The original nebula background stays the same. The round green and red dots beside the addon status show whether each addon is loaded.
+
+Copying settings from another tab asks before replacing the current draft, and you still have to press Save Page after reviewing it. Synchronize from Blizzard Settings now enables Save Page after updating the current tab. Toggle Addons warns when you have unsaved changes and lets you cancel, discard them, or save before opening Blizzard's AddOns window.
+
+I added short hover tips to Synchronize from Blizzard Settings, Toggle Addons, and Show missing addons. The new Command List button opens a window with the slash commands and what they do. Click a command to select it in the box, then press Ctrl+C to copy it.
+
+I also cleaned up the minimap tooltip. The class icon and class name now share one line, with the role icon and role on the next. The text stays at the normal tooltip size, and the tooltip resets its font each time it opens so it won't grow after repeated hovers. It also shows the current location type and the name of the area you're in. Addon names keep their own colours, with a small round green or red dot in front to show their state.
+
+City detection now uses the named major hubs instead of treating every resting area or city map as a city. Stepping into an inn in a smaller place such as Gadgetzan will leave the World profile active. I rounded the green outline around the selected tab to match the button.

@@ -1,6 +1,6 @@
 local ADDON_NAME = ...
 
-local VERSION = "1.0.6"
+local VERSION = "1.0.7"
 local ADDON_FOLDER = ADDON_NAME or "ForeverAddonManagerPlus"
 
 local LOCATION_TYPES = {
@@ -100,7 +100,12 @@ local discardButton
 local reloadButton
 local tabButtons = {}
 local toggleAddonsButton
-local manualAddonBox
+local commandListButton
+local commandListDialog
+local commandCopyBox
+local toggleAddonsDialog
+-- Sync and copy operations change the draft outside the checkbox handler, so keep Save Page enabled for them.
+local forceDraftDirty = false
 local locationContent
 local settingsContent
 local showMinimapButtonCheck
@@ -698,41 +703,6 @@ local function GetPlayerMapID()
     return nil
 end
 
-local function IsCityMap(mapID)
-    if not mapID or not C_Map then
-        return false
-    end
-
-    local current = mapID
-    for _ = 1, 8 do
-        if type(C_Map.IsCityMap) == "function" then
-            local ok, value = pcall(C_Map.IsCityMap, current)
-            if ok and value == true then
-                return true
-            end
-        end
-
-        if type(C_Map.GetMapInfo) ~= "function" then
-            break
-        end
-        local ok, info = pcall(C_Map.GetMapInfo, current)
-        if not ok or type(info) ~= "table" or type(info.parentMapID) ~= "number"
-            or info.parentMapID <= 0 or info.parentMapID == current then
-            break
-        end
-        current = info.parentMapID
-    end
-    return false
-end
-
-local function IsRestingSafe()
-    if type(IsResting) ~= "function" then
-        return false
-    end
-    local ok, value = pcall(IsResting)
-    return ok and value == true
-end
-
 local function ContainsTramName(text)
     return type(text) == "string" and text:lower():find("tram", 1, true) ~= nil
 end
@@ -781,7 +751,8 @@ local function DetectLocation()
         return "other", zoneName, instanceName, mapID, instanceID, instanceType
     end
 
-    if CITY_ZONES[zoneLower] or CITY_ZONES[instanceLower] or IsCityMap(mapID) or IsRestingSafe() then
+    -- Only the named major hubs use the City profile; resting in a small-town inn should not count.
+    if CITY_ZONES[zoneLower] or CITY_ZONES[instanceLower] then
         return "city", zoneName, instanceName, mapID, instanceID, instanceType
     end
 
@@ -829,6 +800,9 @@ IsDraftDirty = function()
     if not uiReady then
         return false
     end
+    if activePage ~= "settings" and forceDraftDirty then
+        return true
+    end
     if activePage == "settings" then
         local settings = draft.settings or {}
         return settings.minimapEnabled ~= (db.minimap.hidden ~= true)
@@ -851,6 +825,7 @@ IsDraftDirty = function()
 end
 
 local function LoadDraft()
+    forceDraftDirty = false
     if activePage == "settings" then
         draft = {
             addons = {},
@@ -888,6 +863,7 @@ local function SaveDraft(suppressApply)
         if wasDirty then
             sessionHasSavedChange = true
         end
+        forceDraftDirty = false
         if RefreshSettingsPage then
             RefreshSettingsPage()
         end
@@ -901,6 +877,7 @@ local function SaveDraft(suppressApply)
     end
     profile.addons = DeepCopy(draft.addons or {})
     db.hasSavedAddonSettings = true
+    forceDraftDirty = false
     if wasDirty then
         sessionHasSavedChange = true
     end
@@ -1229,6 +1206,51 @@ local function MakeLabel(parent, text, template)
     return label
 end
 
+local function ResetGameTooltipFonts()
+    if not GameTooltip then
+        return
+    end
+    for index = 1, 40 do
+        local left = _G["GameTooltipTextLeft" .. index]
+        if left and left.SetFontObject then
+            if GameTooltipText then
+                left:SetFontObject(GameTooltipText)
+            end
+        end
+        local right = _G["GameTooltipTextRight" .. index]
+        if right and right.SetFontObject and GameTooltipText then
+            right:SetFontObject(GameTooltipText)
+        end
+    end
+end
+
+local function PrepareGameTooltip(owner, anchor)
+    if not GameTooltip then
+        return false
+    end
+    GameTooltip:Hide()
+    GameTooltip:ClearLines()
+    ResetGameTooltipFonts()
+    GameTooltip:SetOwner(owner, anchor or "ANCHOR_RIGHT")
+    return true
+end
+
+local function AddHelpTooltip(frame, title, message)
+    frame:SetScript("OnEnter", function(self)
+        if not PrepareGameTooltip(self, "ANCHOR_RIGHT") then
+            return
+        end
+        GameTooltip:AddLine(title, 1, 0.82, 0.25, true)
+        GameTooltip:AddLine(message, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    frame:SetScript("OnLeave", function()
+        if GameTooltip then
+            GameTooltip:Hide()
+        end
+    end)
+end
+
 local function AddonSort(a, b)
     local aTitle = (a.title or a.name):lower()
     local bTitle = (b.title or b.name):lower()
@@ -1242,15 +1264,21 @@ local function GetAddonRuntimePresentation(item)
     if not item.installed then
         return "Not installed • saved settings retained", 0.62, 0.66, 0.74
     end
-    if item.loaded == true then
-        if item.currentEnabled == false then
-            return "Running • disabled for next load", 0.28, 1.0, 0.42
+    if item.currentEnabled == false then
+        if item.loaded == true then
+            return "Disabled • still loaded until reload", 1.0, 0.36, 0.36
         end
+        return "Disabled", 1.0, 0.36, 0.36
+    end
+    if item.loaded == true and item.loadable ~= false then
         return "Running", 0.28, 1.0, 0.42
     end
     if item.loaded == false then
         if item.loadReason == "DEP_DISABLED" then
             return "Not running • dependency disabled", 1.0, 0.36, 0.36
+        end
+        if item.currentEnabled == true then
+            return "Enabled • not currently running", 1.0, 0.36, 0.36
         end
         return "Not running", 1.0, 0.36, 0.36
     end
@@ -1318,8 +1346,21 @@ RefreshAddonList = function()
             background:SetAllPoints(row)
             row.background = background
 
+            row:EnableMouseWheel(true)
+            row:SetScript("OnMouseWheel", function(_, delta)
+                if listScroll and listScroll.wheelHandler then
+                    listScroll.wheelHandler(delta)
+                end
+            end)
+
             local check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
             check:SetPoint("LEFT", row, "LEFT", 4, 0)
+            check:EnableMouseWheel(true)
+            check:SetScript("OnMouseWheel", function(_, delta)
+                if listScroll and listScroll.wheelHandler then
+                    listScroll.wheelHandler(delta)
+                end
+            end)
             row.check = check
 
             local title = MakeLabel(row, "", "GameFontNormal")
@@ -1330,9 +1371,14 @@ RefreshAddonList = function()
 
             local state = MakeLabel(row, "", "GameFontHighlightSmall")
             state:SetPoint("RIGHT", row, "RIGHT", -12, 0)
-            state:SetWidth(245)
-            state:SetJustifyH("RIGHT")
+            state:SetWidth(205)
+            state:SetJustifyH("LEFT")
             row.state = state
+
+            local statusIcon = row:CreateTexture(nil, "ARTWORK")
+            statusIcon:SetSize(14, 14)
+            statusIcon:SetPoint("RIGHT", state, "LEFT", -5, 0)
+            row.statusIcon = statusIcon
 
             addonRows[index] = row
         end
@@ -1351,9 +1397,17 @@ RefreshAddonList = function()
         end)
 
         local statusText, red, green, blue = GetAddonRuntimePresentation(item)
-        local statusIcon = string.format("|cff%02x%02x%02x●|r ",
-            math.floor(red * 255 + 0.5), math.floor(green * 255 + 0.5), math.floor(blue * 255 + 0.5))
-        row.title:SetText(statusIcon .. item.title .. " (" .. item.name .. ")")
+        local statusTexture = "Interface\\COMMON\\Indicator-Gray"
+        if item.installed then
+            if item.currentEnabled == true and item.loaded == true and item.loadable ~= false then
+                statusTexture = "Interface\\COMMON\\Indicator-Green"
+            else
+                statusTexture = "Interface\\COMMON\\Indicator-Red"
+            end
+        end
+        row.title:SetText(item.title .. " (" .. item.name .. ")")
+        row.title:SetTextColor(0.91, 0.93, 0.97)
+        row.statusIcon:SetTexture(statusTexture)
         row.state:SetText(statusText)
         row.state:SetTextColor(red, green, blue)
         row:Show()
@@ -1367,8 +1421,35 @@ RefreshAddonList = function()
     if type(listScroll.UpdateScrollChildRect) == "function" then
         listScroll:UpdateScrollChildRect()
     end
+    if listScroll then
+        local range = listScroll:GetVerticalScrollRange()
+        listScroll.targetScroll = math.max(0, math.min(range, listScroll.targetScroll or listScroll:GetVerticalScroll()))
+    end
 end
 
+
+local function RefreshTabButtonStates()
+    for key, button in pairs(tabButtons) do
+        local selected = key == activePage
+        if button.selectedBorder then
+            if selected then
+                button.selectedBorder:Show()
+            else
+                button.selectedBorder:Hide()
+            end
+        end
+        local fontString = button:GetFontString()
+        if fontString and button.originalFont then
+            local fontPath, fontSize, fontFlags = unpack(button.originalFont)
+            fontString:SetFont(fontPath, fontSize, selected and "OUTLINE" or fontFlags)
+            if selected then
+                fontString:SetTextColor(1, 1, 1)
+            else
+                fontString:SetTextColor(0.72, 0.74, 0.80)
+            end
+        end
+    end
+end
 
 RefreshLocationHeader = function()
     if currentLocationText then
@@ -1377,7 +1458,6 @@ RefreshLocationHeader = function()
         currentLocationText:SetTextColor(0.76, 0.79, 0.85)
     end
 
-    -- Only mark the ruleset when its matching location tab is open.
     local viewingActiveRuleset = activePage ~= "settings" and currentLocation ~= nil
         and activePage == currentLocation
     if activeRulesetIndicator then
@@ -1395,15 +1475,7 @@ RefreshLocationHeader = function()
     if RefreshRoleDropdown then
         RefreshRoleDropdown()
     end
-
-    for key, button in pairs(tabButtons) do
-        local label = LOCATION_LABELS[key] or "Settings"
-        if viewingActiveRuleset and key == currentLocation then
-            button:SetText("|cff4dff70●|r |cffdfe6f5" .. label .. "|r")
-        else
-            button:SetText("|cff9a9a9a" .. label .. "|r")
-        end
-    end
+    RefreshTabButtonStates()
 end
 
 RefreshProfileDropdown = function()
@@ -1623,32 +1695,6 @@ local function DeleteActiveProfile()
     end)
 end
 
-local function TrackMissingAddon()
-    local folderName = Trim(manualAddonBox and manualAddonBox:GetText() or "")
-    if folderName == "" then
-        return
-    end
-    if folderName == ADDON_FOLDER then
-        Print("The manager itself does not need a registry entry.")
-        return
-    end
-    RequestNavigation(function()
-        if not db.addonRegistry[folderName] then
-            db.addonRegistry[folderName] = {
-                folder = folderName,
-                title = folderName,
-                installed = false,
-                manuallyTracked = true,
-            }
-        end
-        if manualAddonBox then
-            manualAddonBox:SetText("")
-        end
-        RefreshAddonList()
-        Print("Tracking '" .. folderName .. "'. Its profile settings will be retained until it is installed.")
-    end)
-end
-
 local function RefreshInstalledList()
     RequestNavigation(function()
         ScanInstalledAddons()
@@ -1680,6 +1726,57 @@ local function OpenBlizzardAddonList()
     else
         Print("The Blizzard AddOns list frame (AddonList) is not available on this client.")
     end
+end
+
+local function ShowToggleAddonsDialog()
+    if not IsDraftDirty() then
+        OpenBlizzardAddonList()
+        return
+    end
+
+    if not toggleAddonsDialog then
+        toggleAddonsDialog = CreateFrame("Frame", "ForeverAddonManagerPlusToggleAddonsDialog", UIParent, "UIPanelDialogTemplate")
+        toggleAddonsDialog:SetSize(520, 190)
+        toggleAddonsDialog:SetPoint("CENTER")
+        toggleAddonsDialog:SetFrameStrata("DIALOG")
+        toggleAddonsDialog:SetFrameLevel(212)
+        toggleAddonsDialog:EnableMouse(true)
+        toggleAddonsDialog:Hide()
+
+        local title = MakeLabel(toggleAddonsDialog, "Open Blizzard's AddOns Window", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", toggleAddonsDialog, "TOPLEFT", 22, -22)
+        local message = MakeLabel(toggleAddonsDialog,
+            "Opening Blizzard's AddOns window will close ForeverAddonManagerPlus. You have unsaved changes on this page. If you discard them, those edits will be lost.\n\nChoose whether to cancel, discard your edits, or save this page before continuing.",
+            "GameFontHighlight")
+        message:SetPoint("TOPLEFT", toggleAddonsDialog, "TOPLEFT", 22, -54)
+        message:SetPoint("TOPRIGHT", toggleAddonsDialog, "TOPRIGHT", -22, -54)
+        message:SetJustifyH("LEFT")
+        message:SetJustifyV("TOP")
+
+        local cancel = MakeButton(toggleAddonsDialog, "Cancel", 90, 26)
+        cancel:SetPoint("BOTTOMLEFT", toggleAddonsDialog, "BOTTOMLEFT", 20, 18)
+        cancel:SetScript("OnClick", function()
+            toggleAddonsDialog:Hide()
+        end)
+
+        local discard = MakeButton(toggleAddonsDialog, "Discard & Continue", 150, 26)
+        discard:SetPoint("LEFT", cancel, "RIGHT", 8, 0)
+        discard:SetScript("OnClick", function()
+            toggleAddonsDialog:Hide()
+            DiscardDraft()
+            OpenBlizzardAddonList()
+        end)
+
+        local save = MakeButton(toggleAddonsDialog, "Save & Continue", 140, 26)
+        save:SetPoint("LEFT", discard, "RIGHT", 8, 0)
+        save:SetScript("OnClick", function()
+            if SaveDraft(false) then
+                toggleAddonsDialog:Hide()
+                OpenBlizzardAddonList()
+            end
+        end)
+    end
+    toggleAddonsDialog:Show()
 end
 
 local PANEL_BASE_WIDTH = 1030
@@ -1806,6 +1903,7 @@ local function CopyProfileFromLocation(sourceKey)
         return
     end
     draft.addons = DeepCopy(sourceProfile.addons or {})
+    forceDraftDirty = true
     if RefreshCopyProfileDropdown then
         RefreshCopyProfileDropdown()
     end
@@ -1816,24 +1914,23 @@ local function CopyProfileFromLocation(sourceKey)
 end
 
 CopySettingsFromTab = function(sourceKey)
-    if IsDraftDirty() then
-        StaticPopupDialogs["FAMP_COPY_TAB_CONFIRM"] = {
-            text = "Copy settings from " .. tostring(LOCATION_LABELS[sourceKey])
-                .. "? This will replace the unsaved changes on the current tab.",
-            button1 = "Copy Settings",
-            button2 = "Cancel",
-            OnAccept = function()
-                CopyProfileFromLocation(sourceKey)
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-        StaticPopup_Show("FAMP_COPY_TAB_CONFIRM")
-    else
-        CopyProfileFromLocation(sourceKey)
+    if not LOCATION_LABELS[sourceKey] or sourceKey == activeLocation then
+        return
     end
+    StaticPopupDialogs["FAMP_COPY_TAB_CONFIRM"] = {
+        text = "Are you sure you want to copy the " .. tostring(LOCATION_LABELS[sourceKey]) .. " settings into the current "
+            .. tostring(LOCATION_LABELS[activeLocation]) .. " tab?\n\nThis replaces the current tab's draft, but it does not save anything yet. Review the list, then press Save Page when you're happy with it.",
+        button1 = "Yes, Copy Settings",
+        button2 = "No, Cancel",
+        OnAccept = function()
+            CopyProfileFromLocation(sourceKey)
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
+    StaticPopup_Show("FAMP_COPY_TAB_CONFIRM")
 end
 
 RefreshCopyProfileDropdown = function()
@@ -1874,6 +1971,7 @@ SyncCurrentTabFromBlizzard = function()
     for folderName, enabled in pairs(snapshot) do
         draft.addons[folderName] = enabled
     end
+    forceDraftDirty = true
     RefreshAddonList()
     RefreshFooter()
     Print("Blizzard's AddOns settings were copied to the " .. LOCATION_LABELS[activeLocation]
@@ -2004,6 +2102,27 @@ ShowSyncDialog = function()
     end
 end
 
+local function AddSelectedTabBorder(button)
+    local border = CreateFrame("Frame", nil, button, "BackdropTemplate")
+    border:SetPoint("TOPLEFT", button, "TOPLEFT", -2, 2)
+    border:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 2, -2)
+    border:SetFrameLevel(button:GetFrameLevel() + 4)
+    border:EnableMouse(false)
+    border:SetBackdrop({
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 10,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    border:SetBackdropBorderColor(0.22, 1.0, 0.38, 1.0)
+    border:Hide()
+    button.selectedBorder = border
+
+    local fontString = button:GetFontString()
+    if fontString then
+        button.originalFont = { fontString:GetFont() }
+    end
+end
+
 local function CreatePanelTabsAndPages()
     local tabX = 18
     local tabY = -76
@@ -2014,6 +2133,7 @@ local function CreatePanelTabsAndPages()
         button:SetSize(tabWidth, 28)
         button:SetText(location.label)
         button:SetPoint("TOPLEFT", panel, "TOPLEFT", tabX, tabY)
+        AddSelectedTabBorder(button)
         button:SetScript("OnClick", function()
             SwitchLocation(location.key)
         end)
@@ -2025,6 +2145,7 @@ local function CreatePanelTabsAndPages()
     settingsTab:SetSize(tabWidth, 28)
     settingsTab:SetText("Settings")
     settingsTab:SetPoint("TOPLEFT", panel, "TOPLEFT", tabX, tabY)
+    AddSelectedTabBorder(settingsTab)
     settingsTab:SetScript("OnClick", function()
         SwitchToSettings()
     end)
@@ -2037,12 +2158,88 @@ local function CreatePanelTabsAndPages()
     settingsContent:Hide()
 end
 
+local function ConfigureAddonListScrolling()
+    if not listScroll then
+        return
+    end
+
+    listScroll.targetScroll = 0
+    listScroll.scrollStep = 54
+    listScroll:EnableMouseWheel(true)
+    listScroll.wheelHandler = function(delta)
+        local range = listScroll:GetVerticalScrollRange()
+        local target = listScroll.targetScroll or listScroll:GetVerticalScroll()
+        listScroll.targetScroll = math.max(0, math.min(range, target - (delta * 114)))
+    end
+    listScroll:SetScript("OnMouseWheel", function(_, delta)
+        listScroll.wheelHandler(delta)
+    end)
+
+    -- Keep a target position so wheel and arrow input glide instead of jumping by a page.
+    listScroll:SetScript("OnUpdate", function(self, elapsed)
+        local range = self:GetVerticalScrollRange()
+        local target = math.max(0, math.min(range, self.targetScroll or self:GetVerticalScroll()))
+        self.targetScroll = target
+        local current = self:GetVerticalScroll()
+        local difference = target - current
+        if math.abs(difference) < 0.5 then
+            self.isAnimating = true
+            self:SetVerticalScroll(target)
+            self.isAnimating = false
+            return
+        end
+        self.isAnimating = true
+        self:SetVerticalScroll(current + difference * math.min(1, (elapsed or 0) * 14))
+        self.isAnimating = false
+    end)
+
+    local scrollBar = _G["ForeverAddonManagerPlusAddonScrollScrollBar"]
+    if not scrollBar then
+        return
+    end
+    scrollBar:Show()
+    scrollBar:SetScript("OnValueChanged", function(self, value)
+        if not listScroll.isAnimating then
+            listScroll.targetScroll = value
+        end
+        listScroll:SetVerticalScroll(value)
+    end)
+
+    local upButton = _G[scrollBar:GetName() .. "ScrollUpButton"]
+    if upButton then
+        upButton:Show()
+        upButton:SetScript("OnClick", function()
+            local target = listScroll.targetScroll or listScroll:GetVerticalScroll()
+            listScroll.targetScroll = math.max(0, target - listScroll.scrollStep)
+        end)
+    end
+    local downButton = _G[scrollBar:GetName() .. "ScrollDownButton"]
+    if downButton then
+        downButton:Show()
+        downButton:SetScript("OnClick", function()
+            local target = listScroll.targetScroll or listScroll:GetVerticalScroll()
+            local range = listScroll:GetVerticalScrollRange()
+            listScroll.targetScroll = math.min(range, target + listScroll.scrollStep)
+        end)
+    end
+end
+
 local function CreatePanelLocationControls()
     currentLocationText = MakeLabel(locationContent, "", "GameFontHighlightSmall")
     currentLocationText:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -116)
 
-    activeRulesetIndicator = MakeLabel(locationContent, "|cff4dff70● THIS RULESET IS ACTIVE|r", "GameFontHighlightSmall")
-    activeRulesetIndicator:SetPoint("TOPLEFT", panel, "TOPLEFT", 380, -116)
+    activeRulesetIndicator = CreateFrame("Frame", nil, locationContent)
+    activeRulesetIndicator:SetSize(250, 24)
+    activeRulesetIndicator:SetPoint("CENTER", panel, "TOP", 0, -116)
+    local activeIcon = activeRulesetIndicator:CreateTexture(nil, "ARTWORK")
+    activeIcon:SetTexture("Interface\\COMMON\\Indicator-Green")
+    activeIcon:SetSize(16, 16)
+    local activeText = MakeLabel(activeRulesetIndicator, "THIS RULESET IS ACTIVE", "GameFontNormalSmall")
+    activeText:SetWidth(210)
+    activeText:SetPoint("CENTER", activeRulesetIndicator, "CENTER", 11, 0)
+    activeText:SetJustifyH("CENTER")
+    activeIcon:SetPoint("RIGHT", activeText, "LEFT", -6, 0)
+    activeText:SetTextColor(0.36, 1.0, 0.48)
     activeRulesetIndicator:Hide()
 
     currentProfileText = MakeLabel(locationContent, "Profile:", "GameFontNormal")
@@ -2085,41 +2282,34 @@ local function CreatePanelLocationControls()
     local syncButton = MakeButton(locationContent, "Synchronize from Blizzard Settings", 220, 24)
     syncButton:SetPoint("LEFT", copyProfileDropdown, "RIGHT", 22, 0)
     syncButton:SetScript("OnClick", ShowSyncDialog)
+    AddHelpTooltip(syncButton, "Synchronize from Blizzard Settings",
+        "Copy the on/off choices from Blizzard's AddOns window into your saved setup. You can update just this tab or every tab. It doesn't turn addons on or off right away.")
 
     showMissingCheck = CreateFrame("CheckButton", nil, locationContent, "UICheckButtonTemplate")
     showMissingCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -216)
-    showMissingCheck:SetChecked(true)
+    -- Keep missing entries out of the way; their saved choices stay in the registry.
+    showMissingCheck:SetChecked(false)
     local missingLabel = MakeLabel(locationContent, "Show missing addons", "GameFontHighlightSmall")
     missingLabel:SetPoint("LEFT", showMissingCheck, "RIGHT", 2, 0)
     showMissingCheck:SetScript("OnClick", function()
         RefreshAddonList()
     end)
-
+    AddHelpTooltip(showMissingCheck, "Show missing addons",
+        "Turn this on to show addons you don't have installed right now but have saved settings for. Their settings stay safe; this only shows or hides them.")
     local refreshButton = MakeButton(locationContent, "Refresh Addon List", 140, 24)
     refreshButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -22, -213)
     refreshButton:SetScript("OnClick", RefreshInstalledList)
 
-    local missingPrompt = MakeLabel(locationContent, "Track a missing/future addon by folder name:", "GameFontHighlightSmall")
-    missingPrompt:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -244)
-
-    manualAddonBox = CreateFrame("EditBox", nil, locationContent, "InputBoxTemplate")
-    manualAddonBox:SetSize(230, 24)
-    manualAddonBox:SetPoint("LEFT", missingPrompt, "RIGHT", 8, 0)
-    manualAddonBox:SetAutoFocus(false)
-    manualAddonBox:SetMaxLetters(100)
-
-    local trackButton = MakeButton(locationContent, "Track Addon", 100, 24)
-    trackButton:SetPoint("LEFT", manualAddonBox, "RIGHT", 8, 0)
-    trackButton:SetScript("OnClick", TrackMissingAddon)
-
     listScroll = CreateFrame("ScrollFrame", "ForeverAddonManagerPlusAddonScroll", locationContent, "UIPanelScrollFrameTemplate")
-    listScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -273)
+    listScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 22, -248)
     listScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -42, 72)
     listScroll:SetClipsChildren(true)
+    listScroll.scrollBarHideable = false
 
     listContent = CreateFrame("Frame", nil, listScroll)
     listContent:SetSize(940, 1)
     listScroll:SetScrollChild(listContent)
+    ConfigureAddonListScrolling()
     RefreshCopyProfileDropdown()
 end
 
@@ -2154,8 +2344,10 @@ local function CreatePanelSettingsControls()
     tooltipStatusHelpText:SetText("?")
     tooltipStatusHelpText:SetTextColor(0.55, 0.75, 1.0)
     tooltipStatusHelp:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Addon status colors", 1, 1, 1)
+        if not PrepareGameTooltip(self, "ANCHOR_RIGHT") then
+            return
+        end
+        GameTooltip:AddLine("Addon status colors", 1, 1, 1, true)
         GameTooltip:AddLine("Green: Loaded in this game session. Disabling it takes effect after a reload.", 0.28, 1.0, 0.42, true)
         GameTooltip:AddLine("Red: Not currently loaded, even if enabled in the selected profile.", 1.0, 0.36, 0.36, true)
         GameTooltip:AddLine("Grey: Not installed; saved profile settings are retained.", 0.62, 0.66, 0.74, true)
@@ -2208,12 +2400,77 @@ local function CreatePanelSettingsControls()
     end
 end
 
+local function ShowCommandListDialog()
+    if not commandListDialog then
+        commandListDialog = CreateFrame("Frame", "ForeverAddonManagerPlusCommandListDialog", UIParent, "UIPanelDialogTemplate")
+        commandListDialog:SetSize(600, 470)
+        commandListDialog:SetPoint("CENTER")
+        commandListDialog:SetFrameStrata("DIALOG")
+        commandListDialog:SetFrameLevel(213)
+        commandListDialog:EnableMouse(true)
+        commandListDialog:Hide()
+
+        local title = MakeLabel(commandListDialog, "ForeverAddonManagerPlus Commands", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", commandListDialog, "TOPLEFT", 24, -22)
+        local instruction = MakeLabel(commandListDialog,
+            "Click a command to select it below, then press Ctrl+C to copy it.", "GameFontHighlightSmall")
+        instruction:SetPoint("TOPLEFT", commandListDialog, "TOPLEFT", 24, -48)
+
+        commandCopyBox = CreateFrame("EditBox", nil, commandListDialog, "InputBoxTemplate")
+        commandCopyBox:SetSize(245, 24)
+        commandCopyBox:SetPoint("BOTTOMLEFT", commandListDialog, "BOTTOMLEFT", 24, 22)
+        commandCopyBox:SetAutoFocus(false)
+        commandCopyBox:SetText("/famp")
+
+        local commands = {
+            { "/famp", "Open or close the manager window." },
+            { "/foreveraddonsplus", "Another way to open or close the manager." },
+            { "/famp scan", "Refresh the installed-addon list." },
+            { "/famp refresh", "Same as scan; refresh the installed-addon list." },
+            { "/famp minimap", "Show or hide the minimap button." },
+            { "/famp location", "Print the location type the manager detects." },
+            { "/famp reload", "Reload the UI when addon changes are waiting." },
+            { "/famp status", "Show whether the manager and minimap button initialized." },
+            { "/famp help", "Print the slash-command help in chat." },
+        }
+
+        for index, entry in ipairs(commands) do
+            local commandText = entry[1]
+            local descriptionText = entry[2]
+            local commandButton = MakeButton(commandListDialog, commandText, 180, 24)
+            commandButton:SetPoint("TOPLEFT", commandListDialog, "TOPLEFT", 24, -70 - ((index - 1) * 32))
+            commandButton:SetScript("OnClick", function()
+                commandCopyBox:SetText(commandText)
+                commandCopyBox:SetFocus()
+                commandCopyBox:HighlightText()
+            end)
+            AddHelpTooltip(commandButton, commandText, "Click to select this command. Press Ctrl+C in the box below to copy it.")
+
+            local description = MakeLabel(commandListDialog, descriptionText, "GameFontHighlightSmall")
+            description:SetPoint("LEFT", commandButton, "RIGHT", 12, 0)
+            description:SetWidth(355)
+            description:SetJustifyH("LEFT")
+        end
+
+        local close = MakeButton(commandListDialog, "Close", 90, 26)
+        close:SetPoint("BOTTOMRIGHT", commandListDialog, "BOTTOMRIGHT", -24, 20)
+        close:SetScript("OnClick", function()
+            commandListDialog:Hide()
+        end)
+    end
+    commandListDialog:Show()
+end
+
 local function CreatePanelFooterControls()
     toggleAddonsButton = MakeButton(panel, "Toggle Addons", 140, 28)
     toggleAddonsButton:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 22, 22)
-    toggleAddonsButton:SetScript("OnClick", function()
-        RequestNavigation(OpenBlizzardAddonList)
-    end)
+    toggleAddonsButton:SetScript("OnClick", ShowToggleAddonsDialog)
+    AddHelpTooltip(toggleAddonsButton, "Toggle Addons",
+        "This closes this window and opens Blizzard's AddOns window. If you've changed something here but haven't saved it, you'll be asked what to do first.")
+
+    commandListButton = MakeButton(panel, "Command List", 112, 28)
+    commandListButton:SetPoint("LEFT", toggleAddonsButton, "RIGHT", 8, 0)
+    commandListButton:SetScript("OnClick", ShowCommandListDialog)
 
     saveButton = CreateFrame("Button", "ForeverAddonManagerPlusSavePageButton", panel, "UIPanelButtonTemplate")
     saveButton:SetSize(120, 28)
@@ -2253,7 +2510,7 @@ local function CreatePanelFooterControls()
     reloadButton:Hide()
 
     footerStatus = MakeLabel(panel, "", "GameFontHighlightSmall")
-    footerStatus:SetPoint("LEFT", toggleAddonsButton, "RIGHT", 14, 0)
+    footerStatus:SetPoint("LEFT", commandListButton, "RIGHT", 12, 0)
     footerStatus:SetPoint("RIGHT", reloadButton, "LEFT", -12, 0)
     footerStatus:SetJustifyH("LEFT")
 end
@@ -2456,6 +2713,43 @@ local function ToggleMinimapButton()
     end
 end
 
+local CLASS_ICON_FALLBACK_COORDS = {
+    WARRIOR = { 0, 0.25, 0, 0.25 },
+    MAGE = { 0.25, 0.49609375, 0, 0.25 },
+    ROGUE = { 0.49609375, 0.7421875, 0, 0.25 },
+    DRUID = { 0.7421875, 0.98828125, 0, 0.25 },
+    HUNTER = { 0, 0.25, 0.25, 0.5 },
+    SHAMAN = { 0.25, 0.49609375, 0.25, 0.5 },
+    PRIEST = { 0.49609375, 0.7421875, 0.25, 0.5 },
+    WARLOCK = { 0.7421875, 0.98828125, 0.25, 0.5 },
+    PALADIN = { 0, 0.25, 0.5, 0.75 },
+}
+
+local function GetClassIconMarkup(classToken)
+    local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classToken]
+        or CLASS_ICON_FALLBACK_COORDS[classToken]
+    if type(coords) ~= "table" then
+        return "|TInterface\\Icons\\INV_Misc_QuestionMark:16:16|t "
+    end
+    return string.format(
+        "|TInterface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes:16:16:0:0:256:256:%d:%d:%d:%d|t ",
+        math.floor(coords[1] * 256 + 0.5), math.floor(coords[2] * 256 + 0.5),
+        math.floor(coords[3] * 256 + 0.5), math.floor(coords[4] * 256 + 0.5))
+end
+
+local function GetRoleIconMarkup(role)
+    if role == "DPS" then
+        return "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:16:16:0:0:256:64:64:128:0:64|t "
+    elseif role == "Healer" then
+        return "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:16:16:0:0:256:64:192:256:0:64|t "
+    elseif role == "Tank" then
+        return "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:16:16:0:0:256:64:128:192:0:64|t "
+    elseif role == "Support" then
+        return "|TInterface\\Icons\\INV_Misc_QuestionMark:16:16|t "
+    end
+    return ""
+end
+
 CreateMinimapButton = function()
     if minimapButton or not Minimap then
         return
@@ -2496,10 +2790,7 @@ CreateMinimapButton = function()
     button:SetScript("OnEnter", function(self)
         self.lastHoverTime = GetTimeSafe()
         self:SetAlpha(1)
-        self.tooltipLineSpacingSet = false
-        self.tooltipPreviousLineSpacing = nil
-        if GameTooltip then
-            GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        if PrepareGameTooltip(self, "ANCHOR_NONE") then
             GameTooltip:ClearAllPoints()
             local cursorX, cursorY
             if type(GetCursorPosition) == "function" then
@@ -2512,34 +2803,30 @@ CreateMinimapButton = function()
                 GameTooltip:SetPoint("BOTTOMLEFT", self, "TOPLEFT", 0, 0)
             end
 
-            GameTooltip:SetText("ForeverAddonManagerPlus", 1, 1, 1)
+            GameTooltip:AddLine("ForeverAddonManagerPlus", 1, 1, 1, true)
             if db.minimap.showTooltipRole ~= false then
-                local role, _, className = GetActiveRole()
-                local roleLabel = role and (className .. " - " .. role) or "Standard location profiles"
-                local roleIcon = ""
-                if role == "DPS" then
-                    roleIcon = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:16:16:0:0:256:64:64:128:0:64|t "
-                elseif role == "Healer" then
-                    roleIcon = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:16:16:0:0:256:64:192:256:0:64|t "
-                elseif role == "Tank" then
-                    roleIcon = "|TInterface\\LFGFrame\\UI-LFG-ICON-ROLES:16:16:0:0:256:64:128:192:0:64|t "
-                elseif role == "Support" then
-                    roleIcon = "|TInterface\\Icons\\INV_Misc_QuestionMark:16:16|t "
+                local role, classToken, className = GetActiveRole()
+                GameTooltip:AddLine("Class: " .. GetClassIconMarkup(classToken) .. tostring(className), 1, 1, 1, true)
+                if role then
+                    GameTooltip:AddLine("Role: " .. GetRoleIconMarkup(role) .. role, 1, 1, 1, true)
+                else
+                    GameTooltip:AddLine("Role: Standard location profiles", 1, 1, 1, true)
                 end
-                GameTooltip:AddLine("Role: " .. roleIcon .. roleLabel, 0.95, 0.88, 0.62, true)
             end
             GameTooltip:AddLine("Location type: " .. tostring(LOCATION_LABELS[currentLocation] or "Detecting"), 0.55, 0.85, 1, true)
+            local locationLineIndex = GameTooltip:NumLines() + 1
+            GameTooltip:AddDoubleLine("Location:", tostring(currentLocationName or "Unknown area"),
+                0.55, 0.85, 1, 1, 1, 1)
+            local locationNameLine = _G["GameTooltipTextRight" .. locationLineIndex]
+            if locationNameLine and locationNameLine.GetFont and locationNameLine.SetFont
+                and GameTooltipText and GameTooltipText.GetFont then
+                local fontPath, fontSize = GameTooltipText:GetFont()
+                if fontPath and fontSize then
+                    locationNameLine:SetFont(fontPath, fontSize, "OUTLINE")
+                end
+            end
 
             if db.minimap.showTooltipAddons == true then
-                if type(GameTooltip.SetCustomLineSpacing) == "function" then
-                    if type(GameTooltip.GetCustomLineSpacing) == "function" then
-                        local spacingOK, previousSpacing = pcall(GameTooltip.GetCustomLineSpacing, GameTooltip)
-                        if spacingOK and type(previousSpacing) == "number" then
-                            self.tooltipPreviousLineSpacing = previousSpacing
-                        end
-                    end
-                    self.tooltipLineSpacingSet = pcall(GameTooltip.SetCustomLineSpacing, GameTooltip, 2)
-                end
                 local addons = {}
                 for folderName, addon in pairs(installedAddons) do
                     local enabled = GetAddonEnabled(folderName, addon.index)
@@ -2570,8 +2857,12 @@ CreateMinimapButton = function()
                     GameTooltip:AddLine("No installed addons found", 0.7, 0.7, 0.7)
                 else
                     for _, addon in ipairs(addons) do
-                        local _, red, green, blue = GetAddonRuntimePresentation(addon)
-                        GameTooltip:AddLine(addon.title, red, green, blue, true)
+                        local isRunning = addon.currentEnabled == true and addon.loaded == true
+                            and addon.loadable ~= false
+                        local marker = isRunning
+                            and "|TInterface\\COMMON\\Indicator-Green:10:10:0:-2|t  "
+                            or "|TInterface\\COMMON\\Indicator-Red:10:10:0:-2|t  "
+                        GameTooltip:AddLine(marker .. addon.title, 1, 1, 1, true)
                     end
                 end
             end
@@ -2583,12 +2874,7 @@ CreateMinimapButton = function()
         self.lastHoverTime = GetTimeSafe()
         if GameTooltip then
             GameTooltip:Hide()
-            if self.tooltipLineSpacingSet and type(GameTooltip.SetCustomLineSpacing) == "function" then
-                pcall(GameTooltip.SetCustomLineSpacing, GameTooltip, self.tooltipPreviousLineSpacing or 0)
-            end
         end
-        self.tooltipLineSpacingSet = false
-        self.tooltipPreviousLineSpacing = nil
     end)
 
     button:SetScript("OnClick", function(self, mouseButton)
