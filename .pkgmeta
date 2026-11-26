@@ -7,5 +7,5 @@ move-folders:
   ForeverAddonManagerPlus/ForeverAddonManagerPlus: ForeverAddonManagerPlus
 
 manual-changelog:
-  filename: release-kit/curse-documentation/CHANGELOG_1.0.6.txt
+  filename: release-kit/curse-documentation/CHANGELOG_1.0.7.txt
   markup-type: plain
