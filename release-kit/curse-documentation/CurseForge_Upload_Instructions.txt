@@ -1,7 +1,6 @@
 CURSEFORGE RELEASE FILES
 
 1. The installable package is release-kit/ForeverAddonManagerPlus.zip. It contains only the ForeverAddonManagerPlus addon folder.
-2. Before committing this release, update the manual-changelog filename in the Git repository's root .pkgmeta to release-kit/curse-documentation/CHANGELOG_1.0.7.txt.
-3. The six images in release-kit/images/ have not been recaptured for 1.0.7. The interface previews still show parts of the previous layout; replace them with screenshots from the updated client before uploading them as new CurseForge media.
-4. Copy the contents of CurseForge_Description.html into the CurseForge project description. Replace any image URL placeholders after uploading replacement screenshots.
-5. Use CurseForge_Listing.txt for the plain-text listing and CHANGELOG_1.0.7.txt for this release's changelog. Keep all older changelogs in this folder.
+2. Before committing this release, update the manual-changelog filename in the Git repository's root .pkgmeta to release-kit/curse-documentation/CHANGELOG_1.0.8.txt.
+3. Use CurseForge_Listing.txt for the plain-text listing and CHANGELOG_1.0.8.txt for this release's changelog. Keep all older changelogs in this folder.
+4. The images in release-kit/images/ are the existing project media. Replace them only when you have new screenshots or artwork to upload.

@@ -1,6 +1,6 @@
 local ADDON_NAME = ...
 
-local VERSION = "1.0.7"
+local VERSION = "1.0.8"
 local ADDON_FOLDER = ADDON_NAME or "ForeverAddonManagerPlus"
 
 local LOCATION_TYPES = {
@@ -166,11 +166,12 @@ local function Trim(value)
     return (value:gsub("^%s*(.-)%s*$", "%1"))
 end
 
-local function GetPlayerName()
-    if type(UnitName) == "function" then
-        local ok, name = pcall(UnitName, "player")
-        if ok and type(name) == "string" and name ~= "" then
-            return name
+local function GetPlayerGUID()
+    -- Forever writes per-character addon choices by GUID; a character name does not update the right AddOns.txt file.
+    if type(UnitGUID) == "function" then
+        local ok, guid = pcall(UnitGUID, "player")
+        if ok and type(guid) == "string" and guid ~= "" then
+            return guid
         end
     end
     return nil
@@ -261,7 +262,7 @@ end
 
 local function GetAddonEnabled(folderName, addonIndex)
     local addon = GetAddonLookupIdentifier(folderName, addonIndex)
-    local character = GetPlayerName()
+    local character = GetPlayerGUID()
     if not addon or not character then
         return nil
     end
@@ -319,7 +320,7 @@ local function GetAddonLoadability(folderName, addonIndex)
         return nil, nil
     end
     local addon = GetAddonLookupIdentifier(folderName, addonIndex)
-    local character = GetPlayerName()
+    local character = GetPlayerGUID()
     if not addon or not character then
         return nil, nil
     end
@@ -343,7 +344,7 @@ local function IsLockedAddon(folderName)
 end
 
 local function SetAddonEnabled(folderName, enabled)
-    local character = GetPlayerName()
+    local character = GetPlayerGUID()
     if not character then
         return false, "Could not identify the current character; no addon state was changed."
     end
@@ -370,11 +371,6 @@ local function SetAddonEnabled(folderName, enabled)
     end
     if result == false then
         return false, "The client rejected the request."
-    end
-
-    local actual = GetAddonEnabled(folderName)
-    if actual ~= nil and actual ~= enabled then
-        return false, "The client did not accept the requested state."
     end
     return true
 end
@@ -1128,16 +1124,14 @@ ApplyLocationProfile = function(reason, force)
 
     local changedCount = 0
     local failures = {}
+    local requestedChanges = {}
     for folderName, desired in pairs(profile.addons) do
         if type(desired) == "boolean" and installedAddons[folderName] and not IsLockedAddon(folderName) then
             local current = GetAddonEnabled(folderName)
             if current ~= nil and current ~= desired then
                 local ok, err = SetAddonEnabled(folderName, desired)
                 if ok then
-                    changedCount = changedCount + 1
-                    if installedAddons[folderName] then
-                        installedAddons[folderName].enabled = desired
-                    end
+                    requestedChanges[#requestedChanges + 1] = { name = folderName, enabled = desired }
                 else
                     failures[#failures + 1] = folderName .. ": " .. tostring(err)
                 end
@@ -1147,6 +1141,19 @@ ApplyLocationProfile = function(reason, force)
 
     if C_AddOns and type(C_AddOns.SaveAddOns) == "function" then
         pcall(C_AddOns.SaveAddOns)
+    end
+
+    -- Check the saved states after the batch is written, not while the client is still collecting changes.
+    for _, change in ipairs(requestedChanges) do
+        local actual = GetAddonEnabled(change.name)
+        if actual ~= nil and actual ~= change.enabled then
+            failures[#failures + 1] = change.name .. ": The client did not accept the requested state."
+        else
+            changedCount = changedCount + 1
+            if installedAddons[change.name] then
+                installedAddons[change.name].enabled = change.enabled
+            end
+        end
     end
 
     if changedCount > 0 then
@@ -2798,12 +2805,16 @@ CreateMinimapButton = function()
             end
             local scale = UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
             if cursorX and cursorY and scale and scale > 0 then
-                GameTooltip:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", cursorX / scale, cursorY / scale)
+                -- Keep the list to the left of the cursor so it doesn't cover the minimap.
+                GameTooltip:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMLEFT", cursorX / scale - 14, cursorY / scale)
             else
-                GameTooltip:SetPoint("BOTTOMLEFT", self, "TOPLEFT", 0, 0)
+                GameTooltip:SetPoint("BOTTOMRIGHT", self, "TOPLEFT", -8, 0)
+            end
+            if type(GameTooltip.SetClampedToScreen) == "function" then
+                GameTooltip:SetClampedToScreen(true)
             end
 
-            GameTooltip:AddLine("ForeverAddonManagerPlus", 1, 1, 1, true)
+            GameTooltip:AddLine("|cffff4545F|r|cffff9f43o|r|cfffff05ar|r|cff55e875e|r|cff85ddffv|r|cffc78bfae|r|cffff4545r|r|cffff9f43A|r|cfffff05ad|r|cff55e875d|r|cff85ddffo|r|cffc78bfan|r|cffff4545M|r|cffff9f43a|r|cfffff05an|r|cff55e875a|r|cff85ddffg|r|cffc78bfae|r|cffff4545r|r|cffff9f43P|r|cfffff05al|r|cff55e875u|r|cff85ddffs|r", 1, 1, 1, true)
             if db.minimap.showTooltipRole ~= false then
                 local role, classToken, className = GetActiveRole()
                 GameTooltip:AddLine("Class: " .. GetClassIconMarkup(classToken) .. tostring(className), 1, 1, 1, true)

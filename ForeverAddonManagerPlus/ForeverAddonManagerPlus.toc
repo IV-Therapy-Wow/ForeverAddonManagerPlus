@@ -1,8 +1,8 @@
 ## Interface: 16001
-## Title: |cffff3030F|r|cffff8c00o|r|cffffff00r|r|cff32cd32e|r|cff00bfffv|r|cff8a2be2e|r|cffff3030r|r|cffff8c00A|r|cffffff00d|r|cff32cd32d|r|cff00bfffo|r|cff8a2be2n|r|cffff3030M|r|cffff8c00a|r|cffffff00n|r|cff32cd32a|r|cff00bfffg|r|cff8a2be2e|r|cffff3030r|r|cffff8c00P|r|cffffff00l|r|cff32cd32u|r|cff00bfffs|r |cff00ff00v1.0.7|r
+## Title: |cffff4545F|r|cffff9f43o|r|cfffff05ar|r|cff55e875e|r|cff85ddffv|r|cffc78bfae|r|cffff4545r|r|cffff9f43A|r|cfffff05ad|r|cff55e875d|r|cff85ddffo|r|cffc78bfan|r|cffff4545M|r|cffff9f43a|r|cfffff05an|r|cff55e875a|r|cff85ddffg|r|cffc78bfae|r|cffff4545r|r|cffff9f43P|r|cfffff05al|r|cff55e875u|r|cff85ddffs|r |cff00ff00v1.0.8|r
 ## Author: IV Therapy
 ## Notes: Automatic addon profiles by location and class/role, with custom profiles and a configurable minimap status tooltip.
-## Version: 1.0.7
+## Version: 1.0.8
 ## IconTexture: Interface\AddOns\ForeverAddonManagerPlus\Textures\ForeverAddonManagerPlusIcon.tga
 ## SavedVariables: ForeverAddonManagerPlusDB
 

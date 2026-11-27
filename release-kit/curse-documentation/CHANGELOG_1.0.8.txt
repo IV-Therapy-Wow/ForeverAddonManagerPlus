@@ -1,0 +1,5 @@
+ForeverAddonManagerPlus 1.0.8
+
+Fixed an issue that could interfere with addon enable and disable settings when switching profiles.
+
+The minimap tooltip now opens to the left of the cursor so it stays clear of the minimap. Its title uses the same bright rainbow colours as the addon name in Blizzard’s AddOns list, with a light blue accent.

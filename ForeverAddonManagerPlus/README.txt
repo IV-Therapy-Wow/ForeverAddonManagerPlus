@@ -1,5 +1,5 @@
 ForeverAddonManagerPlus
-Version 1.0.7
+Version 1.0.8
 A full-feature addon manager for World of Warcraft: Forever.
 
 WHAT IT DOES
@@ -170,7 +170,7 @@ modified versions to be redistributed, including for a fee, as long as its
 terms are followed. The community principle above explains my view; it does
 not add restrictions to the MIT License.
 
-Version 1.0.7
+Version 1.0.8
 CITY PROFILE DETECTION
 
 The City profile is limited to the major auction-house hubs listed by the addon. Inns and resting areas in smaller towns, such as Gadgetzan, do not switch you to the City profile.
