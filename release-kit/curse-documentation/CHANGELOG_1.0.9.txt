@@ -1,0 +1,6 @@
+ForeverAddonManagerPlus 1.0.9
+
+- Location changes now share one reload reminder. It updates as you move between areas, and Reload Now applies the profile for the location you're in when you click it.
+- Chat reports each location-type change and notes when a saved class/role profile is available.
+- Added a hidden `/famp settype` test command so location changes and reload prompts can be tested without travelling. Use `/famp settype here` to return to normal location detection.
+- Closing the reload reminder only hides it. The next location change brings it back when a reload is still needed, while an open reminder updates in place.

@@ -1,6 +1,6 @@
 local ADDON_NAME = ...
 
-local VERSION = "1.0.8"
+local VERSION = "1.0.9"
 local ADDON_FOLDER = ADDON_NAME or "ForeverAddonManagerPlus"
 
 local LOCATION_TYPES = {
@@ -52,6 +52,7 @@ local MINIMAP_FADE_SPEED = 1.8
 local MINIMAP_BUTTON_SIZE = 32
 local MINIMAP_BUTTON_RADIUS_OFFSET = 5
 local MINIMAP_ICON = "Interface\\AddOns\\ForeverAddonManagerPlus\\Textures\\ForeverAddonManagerPlusIcon"
+local RAINBOW_ADDON_NAME = "|cffff4545F|r|cffff9f43o|r|cfffff05ar|r|cff55e875e|r|cff85ddffv|r|cffc78bfae|r|cffff4545r|r|cffff9f43A|r|cfffff05ad|r|cff55e875d|r|cff85ddffo|r|cffc78bfan|r|cffff4545M|r|cffff9f43a|r|cfffff05an|r|cff55e875a|r|cff85ddffg|r|cffc78bfae|r|cffff4545r|r|cffff9f43P|r|cfffff05al|r|cff55e875u|r|cff85ddffs|r"
 local NEBULA_BACKGROUND = "Interface\\AddOns\\ForeverAddonManagerPlus\\Textures\\NebulaBackground"
 
 local db
@@ -74,7 +75,7 @@ local draft = { addons = {}, settings = {} }
 local pendingNavigation
 local unsavedDialog
 local deleteDialog
-local reloadPromptOpen = false
+local reloadPromptDialog
 local pendingApplication = false
 local pendingReload = false
 local pendingReloadReason = nil
@@ -117,6 +118,10 @@ local settingsHint
 local RefreshSettingsPage
 
 local ApplyLocationProfile
+local CheckLocation
+local ReloadWithCurrentLocation
+local GetSavedClassRoleProfileInfo
+local UpdateReloadPromptDialog
 local IsDraftDirty
 local RefreshAddonList
 local RefreshLocationHeader
@@ -137,6 +142,25 @@ local function Print(message)
     if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
         DEFAULT_CHAT_FRAME:AddMessage("|cffd8a64bForeverAddonManagerPlus:|r " .. tostring(message))
     end
+end
+
+local function PrintLocationChange(locationKey)
+    if not (DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage) then
+        return
+    end
+
+    local label = LOCATION_LABELS[locationKey] or tostring(locationKey)
+    local message = RAINBOW_ADDON_NAME
+        .. " |cffc78bfaYou entered a new location type: |r|cffffff00" .. label .. "|r"
+    local classRoleLabel = GetSavedClassRoleProfileInfo and GetSavedClassRoleProfileInfo(locationKey)
+
+    if classRoleLabel then
+        message = message .. " |cffc78bfa- Found saved addon profile for |r|cffffff00"
+            .. classRoleLabel .. "|r |cffc78bfa— location type: |r|cffffff00" .. label .. "|r"
+    end
+
+    message = message .. "|cffc78bfa.|r"
+    DEFAULT_CHAT_FRAME:AddMessage(message)
 end
 
 local function SafeCall(func, ...)
@@ -435,6 +459,9 @@ local function EnsureDatabase()
     if type(db.activeRoleByClass) ~= "table" then
         db.activeRoleByClass = {}
     end
+    if type(db.testLocationOverrides) ~= "table" then
+        db.testLocationOverrides = {}
+    end
     if type(db.minimap) ~= "table" then
         db.minimap = {}
     end
@@ -675,6 +702,40 @@ local function GetActiveProfile(locationKey)
     return profile, name
 end
 
+GetSavedClassRoleProfileInfo = function(locationKey)
+    if not db or type(locationKey) ~= "string" then
+        return nil
+    end
+
+    local role, classToken, className = GetActiveRole()
+    if not role then
+        return nil
+    end
+
+    local classProfiles = db.classRoleProfiles and db.classRoleProfiles[classToken]
+    local roleProfile = type(classProfiles) == "table" and classProfiles[role] or nil
+    local roleLocations = type(roleProfile) == "table" and roleProfile.locations or nil
+    local locationData = type(roleLocations) == "table" and roleLocations[locationKey] or nil
+    if type(locationData) ~= "table" or type(locationData.profiles) ~= "table" then
+        return nil
+    end
+
+    local profileName = locationData.activeProfile or "Default"
+    local profile = locationData.profiles[profileName]
+    if type(profile) ~= "table" then
+        profile = locationData.profiles.Default
+    end
+    if type(profile) ~= "table" or type(profile.addons) ~= "table" then
+        return nil
+    end
+
+    return tostring(className) .. " - " .. tostring(role)
+end
+
+local function GetReloadProfileSetLabel(locationKey)
+    return GetSavedClassRoleProfileInfo(locationKey) or "Standard profiles"
+end
+
 local function GetZoneName()
     local candidates = { "GetRealZoneText", "GetZoneText", "GetSubZoneText" }
     for _, globalName in ipairs(candidates) do
@@ -753,6 +814,19 @@ local function DetectLocation()
     end
 
     return "world", zoneName, instanceName, mapID, instanceID, instanceType
+end
+
+local function GetEffectiveLocation()
+    local detectedKey, zoneName, instanceName = DetectLocation()
+    local guid = GetPlayerGUID()
+    local overrideKey = guid and db and db.testLocationOverrides
+        and db.testLocationOverrides[guid] or nil
+
+    if type(overrideKey) == "string" and LOCATION_LABELS[overrideKey] then
+        return overrideKey, zoneName, instanceName, true, detectedKey
+    end
+
+    return detectedKey, zoneName, instanceName, false, detectedKey
 end
 
 local function RefreshFooter()
@@ -1014,44 +1088,119 @@ local function RequestNavigation(action)
     unsavedDialog:Show()
 end
 
+UpdateReloadPromptDialog = function()
+    if not reloadPromptDialog then
+        return
+    end
+
+    local locationLabel = LOCATION_LABELS[currentLocation] or "Detecting"
+    local profileSetLabel = GetReloadProfileSetLabel(currentLocation)
+
+    if reloadPromptDialog.locationText then
+        reloadPromptDialog.locationText:SetText(
+            "Current location type: |cffc78bfa" .. locationLabel .. "|r")
+    end
+    if reloadPromptDialog.profileText then
+        reloadPromptDialog.profileText:SetText(
+            "Profile set: |cffc78bfa" .. profileSetLabel .. "|r")
+    end
+end
+
+local function CreateReloadPromptDialog()
+    if reloadPromptDialog then
+        return reloadPromptDialog
+    end
+    if type(CreateFrame) ~= "function" or not UIParent then
+        return nil
+    end
+
+    local dialog = CreateFrame("Frame", "ForeverAddonManagerPlusReloadPrompt", UIParent, "UIPanelDialogTemplate")
+    dialog:SetSize(500, 210)
+    dialog:SetPoint("CENTER")
+    dialog:SetFrameStrata("DIALOG")
+    dialog:SetFrameLevel(250)
+    dialog:EnableMouse(true)
+    if type(dialog.SetClampedToScreen) == "function" then
+        dialog:SetClampedToScreen(true)
+    end
+
+    if dialog.title then
+        dialog.title:ClearAllPoints()
+        dialog.title:SetPoint("TOPLEFT", dialog, "TOPLEFT", 28, -8)
+        dialog.title:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -28, -8)
+        dialog.title:SetHeight(16)
+        dialog.title:SetJustifyH("CENTER")
+        dialog.title:SetText(RAINBOW_ADDON_NAME)
+    end
+
+    local locationText = dialog:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    locationText:SetPoint("TOPLEFT", dialog, "TOPLEFT", 28, -48)
+    locationText:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -24, -48)
+    locationText:SetJustifyH("LEFT")
+    dialog.locationText = locationText
+
+    local profileText = dialog:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    profileText:SetPoint("TOPLEFT", locationText, "BOTTOMLEFT", 0, -8)
+    profileText:SetPoint("TOPRIGHT", locationText, "BOTTOMRIGHT", 0, -8)
+    profileText:SetJustifyH("LEFT")
+    dialog.profileText = profileText
+
+    local explanation = dialog:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    explanation:SetPoint("TOPLEFT", dialog, "TOPLEFT", 28, -108)
+    explanation:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -24, -108)
+    explanation:SetJustifyH("LEFT")
+    explanation:SetJustifyV("TOP")
+    explanation:SetText("Reload Now applies the profile for the location you're in when you click it, then reloads the UI.")
+    dialog.explanationText = explanation
+
+    local reloadButton = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+    reloadButton:SetSize(132, 26)
+    reloadButton:SetPoint("BOTTOMLEFT", dialog, "BOTTOMLEFT", 22, 18)
+    reloadButton:SetText("Reload Now")
+    reloadButton:SetScript("OnClick", function()
+        ReloadWithCurrentLocation()
+    end)
+
+    local laterButton = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+    laterButton:SetSize(100, 26)
+    laterButton:SetPoint("LEFT", reloadButton, "RIGHT", 10, 0)
+    laterButton:SetText("Later")
+    laterButton:SetScript("OnClick", function()
+        dialog:Hide()
+    end)
+
+    local closeButton = dialog.CloseButton or _G[(dialog:GetName() or "") .. "Close"]
+    if closeButton then
+        closeButton:SetScript("OnClick", function()
+            dialog:Hide()
+        end)
+    end
+
+    dialog:SetScript("OnHide", function()
+        RefreshFooter()
+    end)
+
+    reloadPromptDialog = dialog
+    UpdateReloadPromptDialog()
+    return dialog
+end
+
 local function ShowReloadPrompt()
-    if reloadPromptOpen or not pendingReload then
+    if not pendingReload or IsInCombatLockdownSafe() then
         return
     end
-    if IsInCombatLockdownSafe() then
-        return
-    end
-    if type(StaticPopupDialogs) ~= "table" or type(StaticPopup_Show) ~= "function" then
+
+    local dialog = CreateReloadPromptDialog()
+    if not dialog then
         Print("Addon states have changed. Use the Reload UI button to finish applying them.")
         return
     end
 
-    StaticPopupDialogs["FAMP_RELOAD_REQUIRED"] = {
-        text = "ForeverAddonManagerPlus has changed addon enable states for the current location.\n\nA UI reload is required before those addons start or stop running.\n\nReload now?",
-        button1 = "Reload Now",
-        button2 = "Later",
-        OnAccept = function()
-            reloadPromptOpen = false
-            if IsInCombatLockdownSafe() then
-                Print("Reload is waiting for combat to end. Use the Reload UI button afterwards.")
-                return
-            end
-            if type(ReloadUI) == "function" then
-                ReloadUI()
-            end
-        end,
-        OnCancel = function()
-            reloadPromptOpen = false
-            RefreshFooter()
-        end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3,
-    }
-
-    local shown = StaticPopup_Show("FAMP_RELOAD_REQUIRED")
-    reloadPromptOpen = shown ~= nil
+    -- Reuse the same window. A new location change can show it again after it was closed.
+    UpdateReloadPromptDialog()
+    if not dialog:IsShown() then
+        dialog:Show()
+    end
     RefreshFooter()
 end
 
@@ -1179,24 +1328,66 @@ ApplyLocationProfile = function(reason, force)
     RefreshFooter()
 end
 
-local function CheckLocation()
+CheckLocation = function()
     if not db then
         return
     end
 
-    local key, zoneName, instanceName = DetectLocation()
+    local key, zoneName, instanceName = GetEffectiveLocation()
     currentLocationName = zoneName or instanceName or "Unknown area"
 
     if key ~= currentLocation then
         local previous = currentLocation
         currentLocation = key
-        Print("Location type: " .. LOCATION_LABELS[key] .. " (" .. tostring(currentLocationName) .. ").")
+        if previous then
+            PrintLocationChange(key)
+        end
         ApplyLocationProfile(previous and "location change" or "initial location")
         RefreshLocationHeader()
+        if UpdateReloadPromptDialog then
+            UpdateReloadPromptDialog()
+        end
+        -- If an earlier change still needs a reload, a newly detected type should bring back a dismissed reminder.
+        if pendingReload then
+            ShowReloadPrompt()
+        end
     elseif pendingApplication and not IsInCombatLockdownSafe() then
         ApplyLocationProfile(pendingReloadReason or "deferred location change")
+        if pendingReload then
+            ShowReloadPrompt()
+        end
     else
         RefreshLocationHeader()
+    end
+end
+
+ReloadWithCurrentLocation = function()
+    if not pendingReload then
+        Print("No addon reload is waiting.")
+        return
+    end
+    if IsInCombatLockdownSafe() then
+        Print("Reload is unavailable during combat. The reload reminder will stay available.")
+        return
+    end
+
+    -- Recheck and stage the profile for the player's location at the moment Reload Now is clicked.
+    CheckLocation()
+    if roleApplyChoicePending then
+        Print("Choose how to apply the selected class/role profile before reloading.")
+        return
+    end
+    if pendingRoleApplication then
+        ApplyDeferredRoleProfile()
+    end
+    ApplyLocationProfile("reload requested for current location", true)
+
+    if pendingApplication then
+        Print("The current location profile is still waiting to be applied.")
+        return
+    end
+    if type(ReloadUI) == "function" then
+        ReloadUI()
     end
 end
 
@@ -1483,6 +1674,9 @@ RefreshLocationHeader = function()
         RefreshRoleDropdown()
     end
     RefreshTabButtonStates()
+    if UpdateReloadPromptDialog then
+        UpdateReloadPromptDialog()
+    end
 end
 
 RefreshProfileDropdown = function()
@@ -2510,9 +2704,7 @@ local function CreatePanelFooterControls()
             Print("Reload is unavailable during combat.")
             return
         end
-        if pendingReload and type(ReloadUI) == "function" then
-            ReloadUI()
-        end
+        ReloadWithCurrentLocation()
     end)
     reloadButton:Hide()
 
@@ -2814,7 +3006,7 @@ CreateMinimapButton = function()
                 GameTooltip:SetClampedToScreen(true)
             end
 
-            GameTooltip:AddLine("|cffff4545F|r|cffff9f43o|r|cfffff05ar|r|cff55e875e|r|cff85ddffv|r|cffc78bfae|r|cffff4545r|r|cffff9f43A|r|cfffff05ad|r|cff55e875d|r|cff85ddffo|r|cffc78bfan|r|cffff4545M|r|cffff9f43a|r|cfffff05an|r|cff55e875a|r|cff85ddffg|r|cffc78bfae|r|cffff4545r|r|cffff9f43P|r|cfffff05al|r|cff55e875u|r|cff85ddffs|r", 1, 1, 1, true)
+            GameTooltip:AddLine(RAINBOW_ADDON_NAME, 1, 1, 1, true)
             if db.minimap.showTooltipRole ~= false then
                 local role, classToken, className = GetActiveRole()
                 GameTooltip:AddLine("Class: " .. GetClassIconMarkup(classToken) .. tostring(className), 1, 1, 1, true)
@@ -3023,6 +3215,56 @@ local function RunStartupStep(label, callback)
     return true
 end
 
+local function SetTestLocationType(requestedType)
+    requestedType = Trim(requestedType):lower()
+    if not db then
+        Print("Saved settings are not ready yet. Try again shortly.")
+        return
+    end
+
+    local guid = GetPlayerGUID()
+    if not guid then
+        Print("Could not identify this character. No test location was changed.")
+        return
+    end
+
+    if requestedType == "" then
+        Print("Usage: /famp settype <world|city|instance|raid|battleground|arena|tram|scenario|other|here>")
+        return
+    end
+
+    if requestedType == "here" then
+        local previousOverride = db.testLocationOverrides[guid]
+        db.testLocationOverrides[guid] = nil
+        CheckLocation()
+        if previousOverride then
+            local actualKey = DetectLocation()
+            Print("Location test override cleared. Following your actual location: "
+                .. tostring(LOCATION_LABELS[actualKey] or actualKey) .. ".")
+        else
+            Print("Location detection is already following your actual location.")
+        end
+        return
+    end
+
+    if not LOCATION_LABELS[requestedType] then
+        Print("Unknown location type. Use world, city, instance, raid, battleground, arena, tram, scenario, other, or here.")
+        return
+    end
+
+    -- Keep the override per character and in SavedVariables so it survives /reload during testing.
+    db.testLocationOverrides[guid] = requestedType
+    local previousLocation = currentLocation
+    CheckLocation()
+
+    local label = LOCATION_LABELS[requestedType]
+    if previousLocation == currentLocation then
+        Print("Test location type is already active: " .. label .. ". Use /famp settype here to return to normal detection.")
+    else
+        Print("Test location type set to " .. label .. ". Use /famp settype here to return to normal detection.")
+    end
+end
+
 local function CreateSlashCommands()
     if type(_G.SlashCmdList) ~= "table" then
         _G.SlashCmdList = {}
@@ -3037,15 +3279,19 @@ local function CreateSlashCommands()
                 RefreshInstalledList()
             elseif command == "minimap" then
                 ToggleMinimapButton()
+            elseif command == "settype" or command:match("^settype%s+") then
+                SetTestLocationType(command:match("^settype%s*(.*)$") or "")
             elseif command == "location" then
-                local key, zone = DetectLocation()
-                Print("Detected " .. tostring(LOCATION_LABELS[key] or key) .. " in " .. tostring(zone) .. ".")
-            elseif command == "reload" then
-                if pendingReload and not IsInCombatLockdownSafe() and type(ReloadUI) == "function" then
-                    ReloadUI()
+                local key, zone, _, overrideActive, detectedKey = GetEffectiveLocation()
+                if overrideActive then
+                    Print("Using test location type " .. tostring(LOCATION_LABELS[key] or key)
+                        .. " (game detection: " .. tostring(LOCATION_LABELS[detectedKey] or detectedKey)
+                        .. ") in " .. tostring(zone) .. ".")
                 else
-                    Print("No reload is pending, or a reload is unavailable during combat.")
+                    Print("Detected " .. tostring(LOCATION_LABELS[key] or key) .. " in " .. tostring(zone) .. ".")
                 end
+            elseif command == "reload" then
+                ReloadWithCurrentLocation()
             elseif command == "status" then
                 Print("Settings: " .. (db and "ready" or "not initialized") .. "; window: " .. (panelCreationError and "error" or (panel and "created" or "not created")) .. "; minimap: " .. (minimapButton and (db and db.minimap.hidden and "hidden" or "created") or (Minimap and "waiting for creation" or "waiting for minimap")) .. ".")
                 if panelCreationError then
@@ -3145,9 +3391,6 @@ driver:SetScript("OnEvent", function(_, event, arg1)
     if event == "PLAYER_REGEN_ENABLED" then
         if pendingApplication then
             CheckLocation()
-        end
-        if pendingReload then
-            ShowReloadPrompt()
         end
         return
     end

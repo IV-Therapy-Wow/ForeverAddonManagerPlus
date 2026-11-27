@@ -19,7 +19,7 @@ Toggle Addons opens Blizzard's built-in AddOns window. If you have unsaved edits
 Created by IV Therapy
 Waffle House Guild — PVP Ruleset
 November 25, 2026
-Version 1.0.8
+Version 1.0.9
 
 OPEN-SOURCE LICENSE AND COMMUNITY PRINCIPLE
 
